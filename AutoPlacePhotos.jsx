@@ -10,7 +10,7 @@ function main() {
 
     var psdDoc = app.activeDocument;
 
-    // ✅ 2. Get all other photo documents
+    // ✅ 2. Get all other photo documents (excluding the PSD)
     var photoDocs = [];
     for (var i = 0; i < app.documents.length; i++) {
         var doc = app.documents[i];
@@ -19,9 +19,18 @@ function main() {
         }
     }
 
+    // ✅ If no photo documents are opened, ask user to select files manually
     if (photoDocs.length === 0) {
-        alert("Please open at least one photo document (apart from the PSD).");
-        return;
+        var photoFiles = File.openDialog("📂 Select one or more photo files to place", "Images: *.jpg; *.jpeg; *.png; *.psd", true);
+        if (photoFiles === null || photoFiles.length === 0) {
+            alert("❌ No photo files selected.");
+            return;
+        }
+
+        for (var i = 0; i < photoFiles.length; i++) {
+            var openedDoc = app.open(photoFiles[i]);
+            photoDocs.push(openedDoc);
+        }
     }
 
     // ✅ 3. Rename all smart object layers based on orientation
@@ -42,10 +51,11 @@ function main() {
             // 🔍 Find smart object layer with the given name
             var smartLayer = findLayerAnywhere(psdDoc, layerName);
             if (!smartLayer) {
-                alert("Smart object layer '" + layerName + "' not found.");
+                alert("❗ Smart object layer '" + layerName + "' not found. Skipping this photo.");
                 continue;
             }
 
+            app.activeDocument = psdDoc;
             psdDoc.activeLayer = smartLayer;
 
             // ✅ Get smart layer bounds (x1, y1, x2, y2)
@@ -64,6 +74,9 @@ function main() {
             app.activeDocument = psdDoc;
             var pastedLayer = psdDoc.paste();
             pastedLayer.name = "Pasted_" + layerName;
+
+            // 🔁 Convert to Smart Object before resizing
+            pastedLayer = convertToSmartObject(pastedLayer);
 
             // 🔽 Move pasted below the smart layer
             pastedLayer.move(smartLayer, ElementPlacement.PLACEBEFORE);
@@ -104,6 +117,8 @@ function main() {
 
 // 🔁 Auto rename smart object layers based on orientation (ammu_ format)
 function autoRenameSmartLayers(psdDoc) {
+    app.activeDocument = psdDoc; // ✅ Fix for Error 8100
+
     var landscapeIndex = 1;
     var portraitIndex = 1;
 
@@ -140,6 +155,14 @@ function findLayerAnywhere(parent, name) {
         }
     }
     return null;
+}
+
+// 🔧 Convert a layer to Smart Object
+function convertToSmartObject(layer) {
+    app.activeDocument.activeLayer = layer;
+    var idnewPlacedLayer = stringIDToTypeID("newPlacedLayer");
+    executeAction(idnewPlacedLayer, undefined, DialogModes.NO);
+    return app.activeDocument.activeLayer;
 }
 
 // 🚀 Run the main process
